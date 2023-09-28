@@ -164,6 +164,27 @@ void forwardDynamicsGradientThreaded_codegen(CodeGenRNEADerivatives<T> **rnea_de
         threads->sync();
 }
 
+template<typename T>
+void abaThreaded_codegen_inner(CodeGenABA<T> *aba_code_gen, int nq, int nv, \
+                                           Matrix<T, Dynamic, 1> *qs, Matrix<T, Dynamic, 1> *qds, int tid, int kStart, int kMax){
+    Matrix<T, Dynamic, 1> zeros = Matrix<T, Dynamic, 1>::Zero(nv);
+    for(int k = kStart; k < kMax; k++){
+        aba_code_gen->evalFunction(qs[k],qds[k],zeros);
+    }
+}
+
+template<typename T, int NUM_THREADS, int NUM_TIME_STEPS>
+void abaThreaded_codegen(CodeGenABA<T> **aba_code_gen_arr, int nq, int nv, \
+                                     Matrix<T, Dynamic, 1> *qs, Matrix<T, Dynamic, 1> *qds, ReusableThreads<NUM_THREADS> *threads){
+        for (int tid = 0; tid < NUM_THREADS; tid++){
+            int kStart = NUM_TIME_STEPS/NUM_THREADS*tid; int kMax = NUM_TIME_STEPS/NUM_THREADS*(tid+1); 
+            if(tid == NUM_THREADS-1){kMax = NUM_TIME_STEPS;} 
+            threads->addTask(tid, &abaThreaded_codegen_inner<T>, std::ref(aba_code_gen_arr[tid]), nq, nv,
+                                                                             std::ref(qs), std::ref(qds), tid, kStart, kMax);
+        }
+        threads->sync();
+}
+
 template<typename T, int TEST_ITERS, int NUM_THREADS, int NUM_TIME_STEPS>
 void test(std::string urdf_filepath){
     // Setup timer
@@ -213,6 +234,17 @@ void test(std::string urdf_filepath){
         rnea_derivatives_code_gen_arr[i] = new CodeGenRNEADerivatives<T>(model.cast<T>());
         rnea_derivatives_code_gen_arr[i]->initLib();
         rnea_derivatives_code_gen_arr[i]->loadLib();
+    }
+
+    CodeGenABA<T> aba_code_gen(model.cast<T>());
+    aba_code_gen.initLib();
+    aba_code_gen.loadLib();
+
+    CodeGenABA<T> *aba_code_gen_arr[NUM_THREADS];
+    for (int i = 0; i < NUM_THREADS; i++){
+        aba_code_gen_arr[i] = new CodeGenABA<T>(model.cast<T>());
+        aba_code_gen_arr[i]->initLib();
+        aba_code_gen_arr[i]->loadLib();
     }
 
     // allocate and load on CPU
@@ -311,6 +343,13 @@ void test(std::string urdf_filepath){
             clock_gettime(CLOCK_MONOTONIC,&end);
             printf("FD_DU codegen %fus\n",time_delta_us_timespec(start,end)/static_cast<double>(TEST_ITERS));
 
+            clock_gettime(CLOCK_MONOTONIC,&start);
+            for(int i = 0; i < TEST_ITERS; i++){
+                aba_code_gen.evalFunction(qs[0],qds[0],qdds[0]);
+            }
+            clock_gettime(CLOCK_MONOTONIC,&end);
+            printf("ABA codegen %fus\n",time_delta_us_timespec(start,end)/static_cast<double>(TEST_ITERS));
+
         }
         // multi call with threadPools
         else{
@@ -366,6 +405,16 @@ void test(std::string urdf_filepath){
                 times.push_back(time_delta_us_timespec(start,end));
             }
             printf("[N:%d]: FD_DU codegen: ",NUM_TIME_STEPS); printStats(&times); times.clear();
+            printf("----------------------------------------\n");
+
+            for(int iter = 0; iter < TEST_ITERS; iter++){
+                clock_gettime(CLOCK_MONOTONIC,&start);
+                abaThreaded_codegen<T,NUM_THREADS,NUM_TIME_STEPS>(aba_code_gen_arr,
+                                                                              model.nq,model.nv,qs,qds,&threads);
+                clock_gettime(CLOCK_MONOTONIC,&end);
+                times.push_back(time_delta_us_timespec(start,end));
+            }
+            printf("[N:%d]: ABA codegen: ",NUM_TIME_STEPS); printStats(&times); times.clear();
             printf("----------------------------------------\n");
         }
     #endif

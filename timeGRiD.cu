@@ -43,6 +43,13 @@ void test(int NUM_TIMESTEPS, cudaStream_t *streams, grid::robotModel<T> *d_robot
 
 		printf("df_dqd\n");
 		printMat<T,grid::NUM_JOINTS,grid::NUM_JOINTS>(&hd_data->h_df_du[grid::NUM_JOINTS*grid::NUM_JOINTS],grid::NUM_JOINTS);
+
+		grid::aba<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
+		printf("aba\n");
+		printMat<T,1,grid::NUM_JOINTS>(hd_data->h_qdd,1);
+
+		// printf("crba\n");
+		// printMat<T,1,grid::NUM_JOINTS>(hd_data->h_H,1);
 		
    	#else
 		// Setup timer
@@ -61,6 +68,10 @@ void test(int NUM_TIMESTEPS, cudaStream_t *streams, grid::robotModel<T> *d_robot
     		grid::inverse_dynamics_gradient_single_timing<T,false,true>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
 
     		grid::forward_dynamics_gradient_single_timing<T,false>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
+
+			grid::aba_single_timing<T>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
+
+			//grid::crba_single_timing<T>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
 		}
 		else{
 			for(int iter = 0; iter < TEST_ITERS; iter++){
@@ -142,6 +153,23 @@ void test(int NUM_TIMESTEPS, cudaStream_t *streams, grid::robotModel<T> *d_robot
 				times.push_back(time_delta_us_timespec(start,end));
 			}
 			printf("[N:%d]: FD_DU COMPUTE ONLY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
+
+			for(int iter = 0; iter < TEST_ITERS; iter++){
+				clock_gettime(CLOCK_MONOTONIC,&start);
+				grid::aba<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
+				clock_gettime(CLOCK_MONOTONIC,&end);
+				times.push_back(time_delta_us_timespec(start,end));
+			}
+			printf("[N:%d]: ABA WITH MEMORY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
+
+			for(int iter = 0; iter < TEST_ITERS; iter++){
+				clock_gettime(CLOCK_MONOTONIC,&start);
+				grid::aba_compute_only<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms);
+				clock_gettime(CLOCK_MONOTONIC,&end);
+				times.push_back(time_delta_us_timespec(start,end));
+			}
+			printf("[N:%d]: ABA COMPUTE ONLY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
+
 		}
 	#endif
 }
