@@ -18,38 +18,36 @@ void test(int NUM_TIMESTEPS, cudaStream_t *streams, grid::robotModel<T> *d_robot
 		printMat<T,1,grid::NUM_JOINTS>(&hd_data->h_q_qd_u[2*grid::NUM_JOINTS],1);
 
 		grid::inverse_dynamics<T,false,true>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
-		grid::direct_minv<T,true>(hd_data,d_robotModel,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
-		grid::forward_dynamics<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
-		grid::inverse_dynamics_gradient<T,false,true>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
-		grid::forward_dynamics_gradient<T,false>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
-
 		printf("c\n");
 		printMat<T,1,grid::NUM_JOINTS>(hd_data->h_c,1);
 
+		// grid::crba<T,true>(hd_data,d_robotModel,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
+		// printf("M\n");
+		// printMat<T,grid::NUM_JOINTS,grid::NUM_JOINTS>(hd_data->h_M,grid::NUM_JOINTS);
+
+		grid::direct_minv<T,true>(hd_data,d_robotModel,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
 		printf("Minv\n");
 		printMat<T,grid::NUM_JOINTS,grid::NUM_JOINTS>(hd_data->h_Minv,grid::NUM_JOINTS);
 
-		printf("qdd\n");
+		grid::forward_dynamics<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
+		printf("qdd via M^{-1}(c-u)\n");
 		printMat<T,1,grid::NUM_JOINTS>(hd_data->h_qdd,1);
 
+		grid::aba<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
+		printf("qdd via aba\n");
+		printMat<T,1,grid::NUM_JOINTS>(hd_data->h_qdd,1);
+
+		grid::inverse_dynamics_gradient<T,false,true>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
 		printf("dc_dq\n");
 		printMat<T,grid::NUM_JOINTS,grid::NUM_JOINTS>(hd_data->h_dc_du,grid::NUM_JOINTS);
-
 		printf("dc_dqd\n");
 		printMat<T,grid::NUM_JOINTS,grid::NUM_JOINTS>(&hd_data->h_dc_du[grid::NUM_JOINTS*grid::NUM_JOINTS],grid::NUM_JOINTS);
 
+		grid::forward_dynamics_gradient<T,false>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
 		printf("df_dq\n");
 		printMat<T,grid::NUM_JOINTS,grid::NUM_JOINTS>(hd_data->h_df_du,grid::NUM_JOINTS);
-
 		printf("df_dqd\n");
 		printMat<T,grid::NUM_JOINTS,grid::NUM_JOINTS>(&hd_data->h_df_du[grid::NUM_JOINTS*grid::NUM_JOINTS],grid::NUM_JOINTS);
-
-		grid::aba<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
-		printf("aba\n");
-		printMat<T,1,grid::NUM_JOINTS>(hd_data->h_qdd,1);
-
-		// printf("crba\n");
-		// printMat<T,1,grid::NUM_JOINTS>(hd_data->h_H,1);
 		
    	#else
 		// Setup timer
@@ -61,17 +59,18 @@ void test(int NUM_TIMESTEPS, cudaStream_t *streams, grid::robotModel<T> *d_robot
 			grid::inverse_dynamics_single_timing<T,false,true>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
     		grid::inverse_dynamics_single_timing<T,false,true>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
 
+    		//grid::crba_single_timing<T>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
+
     		grid::direct_minv_single_timing<T,true>(hd_data,d_robotModel,TEST_ITERS,dim3(1,1,1),dimms,streams);
 
     		grid::forward_dynamics_single_timing<T>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
+
+    		grid::aba_single_timing<T>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
 
     		grid::inverse_dynamics_gradient_single_timing<T,false,true>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
 
     		grid::forward_dynamics_gradient_single_timing<T,false>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
 
-			grid::aba_single_timing<T>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
-
-			//grid::crba_single_timing<T>(hd_data,d_robotModel,GRAVITY,TEST_ITERS,dim3(1,1,1),dimms,streams);
 		}
 		else{
 			for(int iter = 0; iter < TEST_ITERS; iter++){
@@ -124,6 +123,22 @@ void test(int NUM_TIMESTEPS, cudaStream_t *streams, grid::robotModel<T> *d_robot
 
 			for(int iter = 0; iter < TEST_ITERS; iter++){
 				clock_gettime(CLOCK_MONOTONIC,&start);
+				grid::aba<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
+				clock_gettime(CLOCK_MONOTONIC,&end);
+				times.push_back(time_delta_us_timespec(start,end));
+			}
+			printf("[N:%d]: ABA WITH MEMORY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
+
+			for(int iter = 0; iter < TEST_ITERS; iter++){
+				clock_gettime(CLOCK_MONOTONIC,&start);
+				grid::aba_compute_only<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms);
+				clock_gettime(CLOCK_MONOTONIC,&end);
+				times.push_back(time_delta_us_timespec(start,end));
+			}
+			printf("[N:%d]: ABA COMPUTE ONLY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
+
+			for(int iter = 0; iter < TEST_ITERS; iter++){
+				clock_gettime(CLOCK_MONOTONIC,&start);
 				grid::inverse_dynamics_gradient<T,false,true>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
 				clock_gettime(CLOCK_MONOTONIC,&end);
 				times.push_back(time_delta_us_timespec(start,end));
@@ -153,23 +168,6 @@ void test(int NUM_TIMESTEPS, cudaStream_t *streams, grid::robotModel<T> *d_robot
 				times.push_back(time_delta_us_timespec(start,end));
 			}
 			printf("[N:%d]: FD_DU COMPUTE ONLY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
-
-			for(int iter = 0; iter < TEST_ITERS; iter++){
-				clock_gettime(CLOCK_MONOTONIC,&start);
-				grid::aba<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms,streams);
-				clock_gettime(CLOCK_MONOTONIC,&end);
-				times.push_back(time_delta_us_timespec(start,end));
-			}
-			printf("[N:%d]: ABA WITH MEMORY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
-
-			for(int iter = 0; iter < TEST_ITERS; iter++){
-				clock_gettime(CLOCK_MONOTONIC,&start);
-				grid::aba_compute_only<T>(hd_data,d_robotModel,GRAVITY,NUM_TIMESTEPS,dim3(NUM_TIMESTEPS,1,1),dimms);
-				clock_gettime(CLOCK_MONOTONIC,&end);
-				times.push_back(time_delta_us_timespec(start,end));
-			}
-			printf("[N:%d]: ABA COMPUTE ONLY: ",NUM_TIMESTEPS); printStats(&times); times.clear();
-
 		}
 	#endif
 }

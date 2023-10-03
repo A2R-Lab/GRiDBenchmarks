@@ -3,4 +3,4 @@
 	url = git@github.com:plancherb1/ReusableThreads.git
 [submodule "GRiD"]
 	path = GRiD
-	url = git@github.com:robot-acceleration/GRiD.git
+	url = git@github.com:a2r-lab/GRiD.git
